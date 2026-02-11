@@ -22,6 +22,15 @@ class DialoguePage {
         this.aiGroupManager = null;
         this.isAIMode = false;
         this.aiRoundCount = 0;
+        this.autoStartAIMode = false;
+        this.showSelectionStep = false;
+        this.selectionMode = 'random'; // 'random' | 'manual'
+        this.allLearnersForSelection = []; // full list for manual picker
+        /** Global conversation number (1, 2, 3 …); never reset on group change */
+        this.globalConversationCount = 0;
+
+        // Unsubscribe handle for global conversation-state listener
+        this._conversationStateUnsub = null;
         
         this.init();
     }
@@ -29,25 +38,184 @@ class DialoguePage {
     init() {
         this.setupEventListeners();
         this.initializeAIGroupManager();
+        this.setupConversationStartListeners();
+        this.setupManualLearnersListeners();
+        this.setupConversationStateSync();
         console.log('Dialogue Page initialized');
+    }
+
+    setupConversationStateSync() {
+        if (!window.ConversationState?.onChange) return;
+
+        // Reflect global state into UI (and dropdown in manual mode)
+        this._conversationStateUnsub = window.ConversationState.onChange((nextState) => {
+            window.ConversationState?.syncUI?.();
+
+            // Only bind dropdown to global state in manual mode
+            if (nextState?.mode === 'manual' && !this.isAIMode) {
+                const selector = document.getElementById('conversation-selector');
+                if (!selector) return;
+                const idx = Math.max(0, (Number(nextState.conversationNumber) || 1) - 1);
+                const value = String(idx);
+                if (selector.value !== value) selector.value = value;
+            }
+        });
     }
 
     initializeAIGroupManager() {
         if (typeof AIGroupConversationManager !== 'undefined') {
             this.aiGroupManager = new AIGroupConversationManager();
             
-            // Set up callbacks for AI events
             this.aiGroupManager.onRoundComplete((round, groupInfo) => {
                 console.log(`AI Round ${round} completed:`, groupInfo);
                 this.updateAIStatus(groupInfo);
+                this.updateRoundBanner(groupInfo);
             });
 
             this.aiGroupManager.onGroupChange((newGroup, groupInfo) => {
                 console.log('AI Group changed to:', newGroup, groupInfo);
                 this.handleAIGroupChange(newGroup, groupInfo);
             });
+
+            this.aiGroupManager.onManualGroupRequest(() => {
+                // Manual mode: 4 rounds done, show picker for next 4 learners
+                this.showManualLearnersPopupForNextGroup();
+            });
         } else {
             console.warn('AIGroupConversationManager not available');
+        }
+    }
+
+    setupConversationStartListeners() {
+        const randomBtn = document.getElementById('selection-mode-random');
+        const manualBtn = document.getElementById('selection-mode-manual');
+        const closeBtn = document.getElementById('conversation-start-close');
+        if (randomBtn) {
+            randomBtn.addEventListener('click', () => this.handleSelectionModeChosen('random'));
+        }
+        if (manualBtn) {
+            manualBtn.addEventListener('click', () => this.handleSelectionModeChosen('manual'));
+        }
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeConversationStartPopup());
+        }
+    }
+
+    closeConversationStartPopup() {
+        Utils.hidePopup('conversation-start-popup');
+        if (typeof app !== 'undefined' && app.showPage) {
+            app.showPage('home');
+        }
+    }
+
+    setupManualLearnersListeners() {
+        const startBtn = document.getElementById('manual-learners-start-btn');
+        const cancelBtn = document.getElementById('manual-learners-cancel-btn');
+        const closeBtn = document.getElementById('manual-learners-close');
+        if (startBtn) startBtn.addEventListener('click', () => this.confirmManualLearners());
+        if (cancelBtn) cancelBtn.addEventListener('click', () => this.cancelManualLearners());
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeManualLearnersPopup());
+        }
+    }
+
+    closeManualLearnersPopup() {
+        Utils.hidePopup('manual-learners-popup');
+        if (!this.isAIMode || !this.aiGroupManager || !this.aiGroupManager.isAIActive()) {
+            Utils.showPopup('conversation-start-popup');
+        }
+    }
+
+    handleSelectionModeChosen(mode) {
+        this.selectionMode = mode;
+        Utils.hidePopup('conversation-start-popup');
+        if (mode === 'random') {
+            this.startAIModeWithSelection();
+        } else {
+            this.showManualLearnersPopupForFirstGroup();
+        }
+    }
+
+    showManualLearnersPopupForFirstGroup() {
+        this.populateManualLearnersList(this.allLearnersForSelection, []);
+        const note = document.getElementById('manual-learners-used-note');
+        if (note) note.style.display = 'none';
+        Utils.showPopup('manual-learners-popup');
+    }
+
+    showManualLearnersPopupForNextGroup() {
+        this.populateManualLearnersList(this.allLearnersForSelection, []);
+        const note = document.getElementById('manual-learners-used-note');
+        if (note) note.style.display = this.aiGroupManager && this.aiGroupManager.usedGroupKeys && this.aiGroupManager.usedGroupKeys.size > 0 ? 'block' : 'none';
+        Utils.showPopup('manual-learners-popup');
+    }
+
+    populateManualLearnersList(allNames, selectedNames) {
+        const listEl = document.getElementById('manual-learners-list');
+        const countEl = document.getElementById('manual-selected-count');
+        const startBtn = document.getElementById('manual-learners-start-btn');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        const selectedSet = new Set(selectedNames);
+        allNames.forEach(name => {
+            const label = document.createElement('label');
+            label.className = 'manual-learner-item';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.dataset.name = name;
+            cb.checked = selectedSet.has(name);
+            cb.addEventListener('change', () => this.updateManualLearnersCount());
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(' ' + name));
+            listEl.appendChild(label);
+        });
+        this.updateManualLearnersCount();
+        if (startBtn) startBtn.disabled = true;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    updateManualLearnersCount() {
+        const listEl = document.getElementById('manual-learners-list');
+        const countEl = document.getElementById('manual-selected-count');
+        const startBtn = document.getElementById('manual-learners-start-btn');
+        if (!listEl) return;
+        const checked = listEl.querySelectorAll('input[type="checkbox"]:checked');
+        const count = checked.length;
+        if (countEl) countEl.textContent = count;
+        let canStart = count === 4;
+        if (canStart && this.aiGroupManager && this.aiGroupManager.isAIActive()) {
+            const selected = Array.from(checked).map(cb => cb.dataset.name);
+            if (this.aiGroupManager.isGroupUsed(selected)) {
+                canStart = false;
+            }
+        }
+        if (startBtn) startBtn.disabled = !canStart;
+    }
+
+    confirmManualLearners() {
+        const listEl = document.getElementById('manual-learners-list');
+        if (!listEl) return;
+        const checked = listEl.querySelectorAll('input[type="checkbox"]:checked');
+        if (checked.length !== 4) return;
+        const selected = Array.from(checked).map(cb => cb.dataset.name);
+        try {
+            if (this.isAIMode && this.aiGroupManager && this.aiGroupManager.isAIActive()) {
+                this.aiGroupManager.setManualGroup(selected);
+                Utils.hidePopup('manual-learners-popup');
+                this.handleAIGroupChange(selected, this.aiGroupManager.getCurrentGroupInfo());
+            } else {
+                Utils.hidePopup('manual-learners-popup');
+                this.startAIModeWithSelection(selected);
+            }
+        } catch (err) {
+            this.showAINotification(err.message || 'This group was already used. Please select a different combination.');
+        }
+    }
+
+    cancelManualLearners() {
+        Utils.hidePopup('manual-learners-popup');
+        if (!this.isAIMode || !this.aiGroupManager || !this.aiGroupManager.isAIActive()) {
+            Utils.showPopup('conversation-start-popup');
         }
     }
 
@@ -56,7 +224,19 @@ class DialoguePage {
         const conversationSelector = document.getElementById('conversation-selector');
         if (conversationSelector) {
             conversationSelector.addEventListener('change', (e) => {
-                this.setCurrentConversation(parseInt(e.target.value));
+                // In AI mode, dropdown is global conversation history and always stays on latest
+                if (this.isAIMode) {
+                    const latest = String(this.globalConversationCount || 0);
+                    if (latest && e.target.value !== latest) {
+                        e.target.value = latest;
+                        this.showAINotification('Auto mode: showing latest conversation.');
+                    }
+                    return;
+                }
+                const idx = parseInt(e.target.value, 10);
+                // Dropdown selection -> GLOBAL state
+                window.ConversationState?.setConversationNumber?.((idx + 1), 'manual');
+                this.setCurrentConversation(idx);
             });
         }
 
@@ -218,11 +398,16 @@ class DialoguePage {
 
         // If conversation ended, jump to next conversation automatically
         if (this._hasNextConversation()) {
+            // RULE: 4 conversations = 1 round. After 4 conversations, select new random 4 learners.
+            if (this.isAIMode && this.aiGroupManager && (this.currentConversationIndex + 1) >= 4) {
+                this.completeAIRound();
+                return;
+            }
             this.setCurrentConversation(this.currentConversationIndex + 1);
             return; // setCurrentConversation schedules the initial delay
         }
 
-        // Handle AI mode when all conversations are finished
+        // Handle AI mode when all conversations are finished (fallback)
         if (this.isAIMode && this.aiGroupManager) {
             this.completeAIRound();
             return;
@@ -246,26 +431,88 @@ class DialoguePage {
                this.currentConversationIndex < this.modifiedDialogue.length - 1;
     }
 
-    async initializeWithLearners(learnerNames) {
+    async initializeWithLearners(learnerNames, options = {}) {
         this.learnerNames = learnerNames || [];
+        this.allLearnersForSelection = [...(learnerNames || [])];
         if (this.learnerNames.length === 0) {
             this.showError('No learners selected. Please go back and select learners.');
             return;
         }
+        this.showSelectionStep = Boolean(options.showSelectionStep);
+        this.autoStartAIMode = Boolean(options.autoAI);
+        if (options.forceAutoAdvance) {
+            this.autoAdvanceEnabled = true;
+            this._syncAutoAdvanceButton();
+        }
 
-    // Check if we should start in AI mode (if enough learners available)
         if (this.learnerNames.length >= 4 && this.aiGroupManager) {
             this.showAIModeOption();
-            
-            // Auto-start AI mode if user has many learners (8 or more)
-            if (this.learnerNames.length >= 8) {
-                setTimeout(() => {
-                    this.showAINotification(`You have ${this.learnerNames.length} learners! AI Mode is perfect for automatic group conversations.`);
-                }, 1000);
-            }
         }
 
         await this.loadDialogue();
+
+        if (this.showSelectionStep && this.learnerNames.length >= 4) {
+            this.showSelectionStep = false;
+            Utils.showPopup('conversation-start-popup');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+        if (this.autoStartAIMode && this.learnerNames.length >= 4) {
+            this.isAIMode = true;
+            this.startAIMode();
+            this.autoStartAIMode = false;
+        }
+    }
+
+    startAIModeWithSelection(initialGroup = null) {
+        try {
+            this.isAIMode = true;
+            // IMPORTANT: GLOBAL RULE - never reset conversation number automatically
+            const existing = window.ConversationState?.get?.();
+            const existingNumber = Number(existing?.conversationNumber);
+            const safeExisting = Number.isFinite(existingNumber) && existingNumber >= 1 ? Math.floor(existingNumber) : 0;
+            this.globalConversationCount = safeExisting;
+            this.aiGroupManager.initialize(this.allLearnersForSelection.length ? this.allLearnersForSelection : this.learnerNames, {
+                selectionMode: this.selectionMode
+            });
+            const groupInfo = this.aiGroupManager.startAIConversation(initialGroup);
+            this.learnerNames = groupInfo.group;
+            this.aiRoundCount = 0;
+            this.processDialogue();
+            this.setCurrentConversation(0);
+            this.updateAIStatus(groupInfo);
+            this.updateRoundBanner(groupInfo);
+            this.showRoundBanner(true);
+            this.showAINotification(`Group: ${groupInfo.group.join(', ')} — Round 1 of ${groupInfo.totalRounds} started.`);
+            if (this.autoAdvanceEnabled) {
+                this._scheduleAutoAdvance(this.autoAdvanceInitialDelayMs);
+            }
+            console.log('AI Mode started with group:', groupInfo.group);
+        } catch (error) {
+            console.error('Failed to start AI mode:', error);
+            this.showError(error.message);
+            this.isAIMode = false;
+        }
+    }
+
+    showRoundBanner(show) {
+        const banner = document.getElementById('ai-round-banner');
+        if (banner) banner.style.display = show && this.isAIMode ? 'block' : 'none';
+    }
+
+    updateRoundBanner(groupInfo) {
+        const numEl = document.getElementById('ai-round-number');
+        const totalEl = document.getElementById('ai-round-total');
+        const namesEl = document.getElementById('ai-round-group-names');
+        if (numEl) numEl.textContent = groupInfo.round;
+        if (totalEl) totalEl.textContent = groupInfo.totalRounds;
+        if (namesEl) namesEl.textContent = groupInfo.group ? groupInfo.group.join(', ') : '-';
+    }
+
+    updateGlobalConversationDisplay() {
+        // Kept for backward compatibility; primary source is ConversationState
+        window.ConversationState?.setConversationNumber?.(this.globalConversationCount, 'ai');
+        window.ConversationState?.syncUI?.();
     }
 
     showAIModeOption() {
@@ -294,20 +541,25 @@ class DialoguePage {
 
     startAIMode() {
         try {
-            this.aiGroupManager.initialize(this.learnerNames);
+            if (!this.isAIMode) {
+                this.isAIMode = true;
+            }
+            // IMPORTANT: GLOBAL RULE - never reset conversation number automatically
+            const existing = window.ConversationState?.get?.();
+            const existingNumber = Number(existing?.conversationNumber);
+            const safeExisting = Number.isFinite(existingNumber) && existingNumber >= 1 ? Math.floor(existingNumber) : 0;
+            this.globalConversationCount = safeExisting;
+            const learners = this.allLearnersForSelection.length ? this.allLearnersForSelection : this.learnerNames;
+            this.aiGroupManager.initialize(learners, { selectionMode: 'random' });
             const groupInfo = this.aiGroupManager.startAIConversation();
-            
-            // Update learner names to current AI group
             this.learnerNames = groupInfo.group;
             this.aiRoundCount = 0;
-            
-            // Reprocess dialogue with new group
             this.processDialogue();
             this.setCurrentConversation(0);
-            
             this.updateAIStatus(groupInfo);
-            this.showAINotification(`AI Mode Started! Group: ${groupInfo.group.join(', ')}`);
-            
+            this.updateRoundBanner(groupInfo);
+            this.showRoundBanner(true);
+            this.showAINotification(`Group: ${groupInfo.group.join(', ')} — Round 1 of ${groupInfo.totalRounds} started.`);
             console.log('AI Mode started with group:', groupInfo.group);
         } catch (error) {
             console.error('Failed to start AI mode:', error);
@@ -331,21 +583,31 @@ class DialoguePage {
     handleAIGroupChange(newGroup, groupInfo) {
         if (!this.isAIMode) return;
         
-        // Update learner names to new group
         this.learnerNames = newGroup;
         this.aiRoundCount = 0;
-        
-        // Reprocess dialogue with new group
         this.processDialogue();
         this.setCurrentConversation(0);
-        
         this.updateAIStatus(groupInfo);
-        this.showAINotification(`New Group Selected: ${newGroup.join(', ')}`);
-        
-        // Auto-start first conversation of new group
+        this.updateRoundBanner(groupInfo);
+        this.showRoundBanner(true);
+        this.showGroupChangeNotice('Group changed. Conversation numbering continues.');
+        this.showAINotification(`Group changed. Conversation numbering continues. — ${newGroup.join(', ')}`);
         if (this.autoAdvanceEnabled) {
             this._scheduleAutoAdvance(this.autoAdvanceInitialDelayMs);
         }
+    }
+
+    showGroupChangeNotice(text) {
+        const notice = document.getElementById('ai-group-change-notice');
+        const textEl = document.getElementById('ai-group-change-text');
+        if (!notice || !textEl) return;
+        textEl.textContent = text;
+        notice.style.display = 'block';
+        notice.classList.add('ai-group-change-visible');
+        setTimeout(() => {
+            notice.classList.remove('ai-group-change-visible');
+            notice.style.display = 'none';
+        }, 4000);
     }
 
     updateAIStatus(groupInfo) {
@@ -436,7 +698,11 @@ class DialoguePage {
             
             this.processDialogue();
             this.populateConversationSelector();
-            this.setCurrentConversation(0);
+            // Do NOT reset conversation on page load; use GLOBAL state (manual mode)
+            const state = window.ConversationState?.get?.();
+            const n = Math.max(1, Number(state?.conversationNumber) || 1);
+            const idx = Math.min(this.modifiedDialogue.length - 1, Math.max(0, n - 1));
+            this.setCurrentConversation(idx);
             
         } catch (error) {
             console.error('Error loading dialogue:', error);
@@ -486,7 +752,8 @@ class DialoguePage {
         // Restore state if possible
         if (currentConversation >= 0 && currentConversation < this.modifiedDialogue.length) {
             setTimeout(() => {
-                this.setCurrentConversation(currentConversation);
+                // Translation refresh should not advance global conversation numbering
+                this.setCurrentConversation(currentConversation, { incrementGlobal: false });
                 if (currentLine >= 0) {
                     this.currentLineIndex = currentLine;
                     this.displayConversation();
@@ -592,6 +859,9 @@ class DialoguePage {
         const selector = document.getElementById('conversation-selector');
         if (!selector) return;
 
+        // In AI mode, we maintain a global, strictly increasing dropdown ourselves.
+        if (this.isAIMode) return;
+
         selector.innerHTML = '';
         
         this.modifiedDialogue.forEach((conversation, index) => {
@@ -600,21 +870,93 @@ class DialoguePage {
             option.textContent = `Conversation ${index + 1}`;
             selector.appendChild(option);
         });
+
+        // Bind initial dropdown selection to GLOBAL state (manual mode)
+        if (window.ConversationState?.get) {
+            const state = window.ConversationState.get();
+            const n = Math.max(1, Number(state.conversationNumber) || 1);
+            const idx = Math.min(this.modifiedDialogue.length - 1, Math.max(0, n - 1));
+            selector.value = String(idx);
+        }
     }
 
-    setCurrentConversation(index) {
+    resetAIDropdown() {
+        const selector = document.getElementById('conversation-selector');
+        if (!selector) return;
+        selector.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Conversation History';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        selector.appendChild(placeholder);
+    }
+
+    appendAIDropdownOption() {
+        const selector = document.getElementById('conversation-selector');
+        if (!selector) return;
+        const current = this.globalConversationCount;
+        const total = Math.ceil(current / 4) * 4;
+        const value = String(current);
+
+        // Create the option if not already present
+        if (!selector.querySelector(`option[value="${value}"]`)) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = `Conversation ${current}/${total}`;
+            selector.appendChild(option);
+        }
+
+        // Always keep latest selected
+        selector.value = value;
+    }
+
+    setCurrentConversation(index, options = {}) {
         if (index < 0 || index >= this.modifiedDialogue.length) {
             return;
         }
 
+        const { incrementGlobal = true } = options || {};
         this.currentConversationIndex = index;
         this.currentLineIndex = -1;
         this.stopAutoAdvance();
+
+        // Global conversation numbering: starts at 1, never reset on group change
+        if (this.isAIMode) {
+            if (incrementGlobal) {
+                this.globalConversationCount = this.globalConversationCount === 0 ? 1 : this.globalConversationCount + 1;
+            } else if (!this.globalConversationCount) {
+                // Safety: ensure we have a valid number even when not incrementing
+                const existing = window.ConversationState?.get?.();
+                const existingNumber = Number(existing?.conversationNumber);
+                this.globalConversationCount =
+                    Number.isFinite(existingNumber) && existingNumber >= 1 ? Math.floor(existingNumber) : 1;
+            }
+            // Sync into GLOBAL state so all pages reflect the same conversation number
+            window.ConversationState?.setConversationNumber?.(this.globalConversationCount, 'ai');
+            window.ConversationState?.syncUI?.();
+            // Round within group: 1–4 (track by conversation index)
+            const groupInfo = this.aiGroupManager.getCurrentGroupInfo();
+            if (groupInfo) {
+                this.updateRoundBanner({
+                    ...groupInfo,
+                    round: index + 1,
+                    totalRounds: 4
+                });
+            }
+            this.appendAIDropdownOption();
+        } else {
+            // Manual mode: conversation number is simply index+1
+            window.ConversationState?.setConversationNumber?.(index + 1, 'manual');
+            window.ConversationState?.syncUI?.();
+        }
         
         // Update conversation selector
         const selector = document.getElementById('conversation-selector');
         if (selector) {
-            selector.value = index;
+            if (!this.isAIMode) {
+                selector.value = index;
+            }
         }
 
         // Display the conversation
@@ -639,8 +981,21 @@ class DialoguePage {
             return;
         }
 
-        const conversation = this.modifiedDialogue[this.currentConversationIndex];
+        let conversation = this.modifiedDialogue[this.currentConversationIndex];
+
+        // AI mode: ensure the *content header* continues globally (5 → 6) even after group change
+        if (this.isAIMode && this.globalConversationCount >= 1) {
+            conversation = this._rewriteConversationHeaderNumber(conversation, this.globalConversationCount);
+        }
         scriptText.innerHTML = this.renderHighlightedDialogue(conversation);
+    }
+
+    _rewriteConversationHeaderNumber(dialogue, globalNumber) {
+        if (!dialogue) return dialogue;
+        const n = Number(globalNumber);
+        if (!Number.isFinite(n) || n < 1) return dialogue;
+        const replacement = `Conversation ${Math.floor(n)}`;
+        return dialogue.replace(/^Conversation\s+\d+/m, replacement);
     }
 
     renderHighlightedDialogue(dialogue) {
@@ -747,15 +1102,17 @@ class DialoguePage {
         
         if (result) {
             if (result.groupChanged) {
-                // Group change is handled by the callback
+                if (result.awaitingManualSelection) {
+                    this.showAINotification('4 rounds complete. Select next 4 learners.');
+                }
                 console.log('AI Round completed - group changed');
             } else {
                 // Same group, start next round
                 this.setCurrentConversation(0);
                 this.updateAIStatus(result);
-                this.showAINotification(`Round ${result.round} started`);
-                
-                // Auto-start next round
+                this.updateRoundBanner(result);
+                this.showRoundBanner(true);
+                this.showAINotification(`Round ${result.round} of ${result.totalRounds} — Current group: ${(result.group || []).join(', ')}`);
                 if (this.autoAdvanceEnabled) {
                     this._scheduleAutoAdvance(this.autoAdvanceInitialDelayMs);
                 }
@@ -765,7 +1122,8 @@ class DialoguePage {
 
     previousConversation() {
         if (this.currentConversationIndex > 0) {
-            this.setCurrentConversation(this.currentConversationIndex - 1);
+            // Going back should not advance the GLOBAL conversation number
+            this.setCurrentConversation(this.currentConversationIndex - 1, { incrementGlobal: false });
         }
     }
 

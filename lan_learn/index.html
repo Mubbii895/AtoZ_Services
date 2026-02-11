@@ -151,21 +151,22 @@
           <h1 class="page-title">
             Language Learning - <span id="current-language">English</span>
           </h1>
+          <div class="current-conversation-display">
+            Conversation <span data-global-conversation-number>1</span>
+          </div>
 
           <!-- Conversation Selector -->
           <select class="conversation-selector" id="conversation-selector">
             <option value="0">Select Conversation</option>
           </select>
 
-          <!-- AI Mode Container -->
+          <!-- AI Mode Container: Round & Group display -->
           <div id="ai-mode-container" class="ai-mode-container" style="display: none;">
-            <div class="ai-mode-toggle-section">
-              <button id="ai-mode-toggle" class="ai-mode-toggle" title="Enable AI Mode">
-                <i id="ai-mode-icon" data-lucide="brain"></i>
-                <span>AI Group Mode</span>
-              </button>
+            <!-- Round & Group Banner (clear Round 1, Round 2... and learner names) -->
+            <div id="ai-round-banner" class="ai-round-banner" style="display: none;">
+              <div class="ai-round-banner-round">Round <span id="ai-round-number">1</span> of <span id="ai-round-total">4</span></div>
+              <div class="ai-round-banner-group">Selected learners: <span id="ai-round-group-names">-</span></div>
             </div>
-            
             <!-- AI Status Display -->
             <div id="ai-status" class="ai-status" style="display: none;">
               <div class="ai-status-item">
@@ -177,6 +178,10 @@
                 <span id="ai-current-round" class="ai-status-value">-</span>
               </div>
             </div>
+          </div>
+          <!-- Group change notification (4ನೇ conversation ಮುಗಿದ ತಕ್ಷಣ) -->
+          <div id="ai-group-change-notice" class="ai-group-change-notice" style="display: none;">
+            <span id="ai-group-change-text">Group changed. Conversation numbering continues.</span>
           </div>
 
           <!-- Speed Control -->
@@ -417,6 +422,41 @@
       </div>
     </div>
 
+    <!-- Conversation Start Modal (Random vs Manual selection) -->
+    <div id="conversation-start-popup" class="popup-overlay popup-blur">
+      <div class="popup-content conversation-start-popup">
+        <button type="button" class="popup-close-btn" id="conversation-start-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+        <h3 class="conversation-start-title">Start Conversation</h3>
+        <p class="conversation-start-desc">Choose how to select your group:</p>
+        <div class="selection-mode-buttons">
+          <button type="button" id="selection-mode-random" class="selection-mode-btn">
+            <i data-lucide="shuffle"></i> Random Selection
+          </button>
+          <button type="button" id="selection-mode-manual" class="selection-mode-btn">
+            <i data-lucide="users"></i> Manual Selection
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Learner Selection Modal (pick exactly 4) -->
+    <div id="manual-learners-popup" class="popup-overlay popup-blur">
+      <div class="popup-content manual-learners-popup">
+        <button type="button" class="popup-close-btn" id="manual-learners-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+        <h3 class="manual-learners-title">Select 4 learners</h3>
+        <p class="manual-learners-desc"><span id="manual-selected-count">0</span> / 4 selected</p>
+        <div id="manual-learners-list" class="manual-learners-list"></div>
+        <div class="manual-learners-actions">
+          <button type="button" id="manual-learners-start-btn" class="popup-btn manual-start-btn" disabled>Start Conversation</button>
+          <button type="button" id="manual-learners-cancel-btn" class="popup-btn cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Popup Modals -->
     <div id="warning-popup" class="popup-overlay">
       <div class="popup-content">
@@ -470,6 +510,7 @@
     <script src="js/translation-service.js"></script>
     <script src="js/default-learners.js"></script>
     <script src="js/ai-group-conversation.js"></script>
+    <script src="js/conversation-state.js"></script>
     <script src="js/App.js"></script>
     <script src="js/learn-home.js"></script>
     <script src="js/dialogue-data.js"></script>

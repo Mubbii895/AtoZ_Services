@@ -191,24 +191,29 @@ class LearnHome {
     }
 
     startLearning() {
-        if (this.selectedLearners.length === 0) {
+        if (this.learners.length < 4) {
             const warningMessage = document.getElementById('warning-message');
             if (warningMessage) {
-                warningMessage.textContent = 'Please select at least one learner to start learning.';
+                warningMessage.textContent = 'Please add at least 4 learners to start the automatic group conversations.';
             }
             Utils.showPopup('warning-popup');
             return;
         }
 
-        // Navigate to dialogue page
+        // Navigate to dialogue; show selection popup (Random / Manual)
         if (app) {
             app.showPage('dialogue');
-            
-            // Initialize dialogue page with selected learners
             if (window.dialoguePage) {
-                window.dialoguePage.initializeWithLearners(this.getSelectedLearnerNames());
+                window.dialoguePage.initializeWithLearners(this.getAllLearnerNames(), {
+                    showSelectionStep: true,
+                    forceAutoAdvance: true
+                });
             }
         }
+    }
+
+    getAllLearnerNames() {
+        return this.learners.map(learner => learner.name);
     }
 
     getSelectedLearnerNames() {

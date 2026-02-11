@@ -1,55 +1,93 @@
-// AI Group Conversation Manager
-// Automatically manages group conversations with random learner selection
+// AI Group Conversation Manager - Conversation Flow Controller
+// RULE 1: Group = random 4 from learners list
+    // RULE 2: 4 conversations = 1 round per group
+// RULE 3: When 4 conversations done → current group END, roundCount reset
+// RULE 4: Before next group → discard old group, new random 4, no repeat of previous group
+// RULE 5: New group → roundCount 1–4 again
+// RULE 6: Continuous loop, no manual trigger, group change automatic
 
 class AIGroupConversationManager {
     constructor() {
         this.allLearners = [];
         this.currentGroup = [];
         this.usedGroups = [];
+        this.usedGroupKeys = new Set();
+        this.lastGroupKey = null;
         this.currentRound = 0;
-        this.maxRoundsPerGroup = 4;
+        this.maxRoundsPerGroup = 1; // 1 round = 4 conversations; after 4 conversations → new group
         this.isActive = false;
         this.conversationHistory = [];
         this.autoAdvanceEnabled = true;
         this.roundCompleteCallback = null;
         this.groupChangeCallback = null;
+        this.manualGroupRequestCallback = null;
+        /** 'random' | 'manual' - how groups are selected */
+        this.selectionMode = 'random';
         
         console.log('AI Group Conversation Manager initialized');
     }
 
     // Initialize with available learners
-    initialize(learners) {
+    initialize(learners, options = {}) {
         if (!Array.isArray(learners) || learners.length < 4) {
             throw new Error('At least 4 learners are required for group conversations');
         }
         
         this.allLearners = [...learners];
         this.usedGroups = [];
+        this.usedGroupKeys = new Set();
+        this.lastGroupKey = null;
         this.conversationHistory = [];
         this.isActive = false;
+        this.selectionMode = options.selectionMode || 'random';
         
-        console.log(`AI Group Manager initialized with ${this.allLearners.length} learners`);
+        console.log(`AI Group Manager initialized with ${this.allLearners.length} learners, mode: ${this.selectionMode}`);
         return this;
     }
 
-    // Start AI group conversation system
-    startAIConversation() {
+    // Start AI group conversation system (first group: random or use provided group for manual)
+    startAIConversation(initialGroup = null) {
         if (this.allLearners.length < 4) {
             throw new Error('Need at least 4 learners to start AI group conversation');
         }
 
         this.isActive = true;
-        this.selectNewGroup();
         this.currentRound = 0;
         
-        console.log('AI Group Conversation started');
-        console.log('First group:', this.currentGroup);
+        if (initialGroup && Array.isArray(initialGroup) && initialGroup.length === 4) {
+            // Manual: use user-selected group
+            this.setManualGroup(initialGroup);
+        } else {
+            // Random: select new group
+            this.selectNewGroup();
+        }
+        
+        console.log('AI Group Conversation started, group:', this.currentGroup);
         
         return {
             group: this.currentGroup,
             round: this.currentRound + 1,
-            totalRounds: this.maxRoundsPerGroup
+            totalRounds: AIGroupConversationManager.CONVERSATIONS_PER_GROUP
         };
+    }
+
+    // Set group manually (used for manual selection mode)
+    setManualGroup(learnerNames) {
+        if (!Array.isArray(learnerNames) || learnerNames.length !== 4) {
+            throw new Error('Manual group must have exactly 4 learners');
+        }
+        const key = this.getGroupKey(learnerNames);
+        this.currentGroup = [...learnerNames];
+        this.usedGroups.push([...this.currentGroup]);
+        this.usedGroupKeys.add(key);
+        this.lastGroupKey = key;
+        this.currentRound = 0;
+
+        if (this.groupChangeCallback) {
+            this.groupChangeCallback(this.currentGroup, this.getCurrentGroupInfo());
+        }
+        console.log('Manual group set:', this.currentGroup);
+        return this.currentGroup;
     }
 
     // Stop AI conversation system
@@ -60,27 +98,41 @@ class AIGroupConversationManager {
         console.log('AI Group Conversation stopped');
     }
 
-    // Select a new random group of 4 learners
+    // Select a new random group of 4 learners (2nd group: no name repeat from previous group)
     selectNewGroup() {
+        const previousGroup = [...this.currentGroup];
+        const pool = previousGroup.length > 0
+            ? this.allLearners.filter(name => !previousGroup.includes(name))
+            : this.allLearners;
+        const useNoRepeat = pool.length >= 4;
+
         let attempts = 0;
-        const maxAttempts = 50; // Prevent infinite loops
+        const maxAttempts = 80;
         let newGroup;
+        let newGroupKey;
 
         do {
-            newGroup = this.getRandomLearners(4);
+            newGroup = useNoRepeat ? this.getRandomLearnersFromPool(pool, 4) : this.getRandomLearners(4);
+            newGroupKey = this.getGroupKey(newGroup);
             attempts++;
-            
+
             if (attempts >= maxAttempts) {
-                // If we can't find a unique group, clear history and start fresh
-                console.log('Clearing group history to allow new combinations');
-                this.usedGroups = [];
-                newGroup = this.getRandomLearners(4);
+                if (this.usedGroupKeys.size >= this.getMaxUniqueGroups()) {
+                    this.usedGroups = [];
+                    this.usedGroupKeys = new Set();
+                }
+                newGroup = useNoRepeat && pool.length >= 4
+                    ? this.getRandomLearnersFromPool(pool, 4)
+                    : this.getRandomLearners(4);
+                newGroupKey = this.getGroupKey(newGroup);
                 break;
             }
-        } while (this.isGroupUsed(newGroup));
+        } while (this.isGroupUsed(newGroup) || (this.lastGroupKey && newGroupKey === this.lastGroupKey));
 
         this.currentGroup = newGroup;
         this.usedGroups.push([...newGroup]);
+        this.usedGroupKeys.add(newGroupKey);
+        this.lastGroupKey = newGroupKey;
         this.currentRound = 0;
 
         // Trigger group change callback
@@ -98,14 +150,26 @@ class AIGroupConversationManager {
         return shuffled.slice(0, count);
     }
 
+    // Get random 4 from a given pool (e.g. allLearners minus previous group — no name repeat)
+    getRandomLearnersFromPool(pool, count) {
+        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, count);
+    }
+
     // Check if a group combination has been used before
     isGroupUsed(group) {
-        const groupNames = group.sort();
-        return this.usedGroups.some(usedGroup => {
-            const usedNames = usedGroup.sort();
-            return groupNames.length === usedNames.length &&
-                   groupNames.every((name, index) => name === usedNames[index]);
-        });
+        const groupKey = this.getGroupKey(group);
+        return this.usedGroupKeys.has(groupKey);
+    }
+
+    getGroupKey(group) {
+        return [...group].sort().join('|');
+    }
+
+    getMaxUniqueGroups() {
+        const n = this.allLearners.length;
+        if (n < 4) return 0;
+        return (n * (n - 1) * (n - 2) * (n - 3)) / 24;
     }
 
     // Complete current round and check if group should change
@@ -130,16 +194,26 @@ class AIGroupConversationManager {
 
         console.log(`Round ${this.currentRound} completed for group:`, this.currentGroup);
 
-        // Check if we need to change group
+        // RULE 3 & 4: Round 4 reached → end group, reset roundCount, discard old group, new random 4
         if (this.currentRound >= this.maxRoundsPerGroup) {
-            console.log('Group rounds completed, selecting new group...');
+            console.log('Group rounds completed (4/4). Resetting roundCount, selecting new group...');
+            if (this.selectionMode === 'manual' && this.manualGroupRequestCallback) {
+                this.manualGroupRequestCallback();
+                return {
+                    groupChanged: true,
+                    awaitingManualSelection: true,
+                    newGroup: null,
+                    round: 1,
+                    totalRounds: AIGroupConversationManager.CONVERSATIONS_PER_GROUP
+                };
+            }
+            // RULE 4: Completely discard old group; new random 4 (no repeat)
             this.selectNewGroup();
-            
             return {
                 groupChanged: true,
                 newGroup: this.currentGroup,
-                round: this.currentRound + 1,
-                totalRounds: this.maxRoundsPerGroup
+                round: 1,
+                totalRounds: AIGroupConversationManager.CONVERSATIONS_PER_GROUP
             };
         }
 
@@ -147,16 +221,19 @@ class AIGroupConversationManager {
             groupChanged: false,
             group: this.currentGroup,
             round: this.currentRound + 1,
-            totalRounds: this.maxRoundsPerGroup
+            totalRounds: AIGroupConversationManager.CONVERSATIONS_PER_GROUP
         };
     }
+
+    // Conversations per group for display (4 conversations = 1 round, then new group)
+    static get CONVERSATIONS_PER_GROUP() { return 4; }
 
     // Get current group information
     getCurrentGroupInfo() {
         return {
             group: [...this.currentGroup],
             round: this.currentRound + 1,
-            totalRounds: this.maxRoundsPerGroup,
+            totalRounds: AIGroupConversationManager.CONVERSATIONS_PER_GROUP,
             isActive: this.isActive,
             totalGroups: this.usedGroups.length,
             conversationsCompleted: this.conversationHistory.length
@@ -201,10 +278,16 @@ class AIGroupConversationManager {
         this.groupChangeCallback = callback;
     }
 
+    onManualGroupRequest(callback) {
+        this.manualGroupRequestCallback = callback;
+    }
+
     // Reset the system
     reset() {
         this.currentGroup = [];
         this.usedGroups = [];
+        this.usedGroupKeys = new Set();
+        this.lastGroupKey = null;
         this.currentRound = 0;
         this.isActive = false;
         this.conversationHistory = [];

@@ -190,6 +190,9 @@ class GTongueLearnApp {
 
         // Update navigation
         this.updateNavigation(pageId);
+
+        // Keep global conversation number reflected on every page
+        window.ConversationState?.syncUI?.();
         
         // Reinitialize Lucide icons for the new page
         setTimeout(() => this.initializeLucideIcons(), 100);

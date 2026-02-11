@@ -267,6 +267,11 @@ button:disabled {
     transition: opacity 0.3s ease;
 }
 
+.popup-overlay.popup-blur {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
 .popup-overlay.show {
     display: flex;
     opacity: 1;
@@ -280,6 +285,35 @@ button:disabled {
     max-width: 400px;
     width: 90%;
     text-align: center;
+    position: relative;
+}
+
+.popup-close-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, color 0.2s;
+}
+
+.popup-close-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.popup-close-btn i {
+    width: 20px;
+    height: 20px;
 }
 
 .popup-buttons {
