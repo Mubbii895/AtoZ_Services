@@ -83,6 +83,13 @@
               >
                 Add Learner
               </button>
+              <button
+                id="add-group-btn"
+                class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 ml-2"
+                title="Add 4-person group"
+              >
+                Add 4-Person Group
+              </button>
             </div>
 
             <div class="continue-btn-container">
@@ -149,6 +156,28 @@
           <select class="conversation-selector" id="conversation-selector">
             <option value="0">Select Conversation</option>
           </select>
+
+          <!-- AI Mode Container -->
+          <div id="ai-mode-container" class="ai-mode-container" style="display: none;">
+            <div class="ai-mode-toggle-section">
+              <button id="ai-mode-toggle" class="ai-mode-toggle" title="Enable AI Mode">
+                <i id="ai-mode-icon" data-lucide="brain"></i>
+                <span>AI Group Mode</span>
+              </button>
+            </div>
+            
+            <!-- AI Status Display -->
+            <div id="ai-status" class="ai-status" style="display: none;">
+              <div class="ai-status-item">
+                <span class="ai-status-label">Current Group:</span>
+                <span id="ai-current-group" class="ai-status-value">-</span>
+              </div>
+              <div class="ai-status-item">
+                <span class="ai-status-label">Round:</span>
+                <span id="ai-current-round" class="ai-status-value">-</span>
+              </div>
+            </div>
+          </div>
 
           <!-- Speed Control -->
           <div class="speed-control" id="speed-control">
@@ -440,6 +469,7 @@
 
     <script src="js/translation-service.js"></script>
     <script src="js/default-learners.js"></script>
+    <script src="js/ai-group-conversation.js"></script>
     <script src="js/App.js"></script>
     <script src="js/learn-home.js"></script>
     <script src="js/dialogue-data.js"></script>

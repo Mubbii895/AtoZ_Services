@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Group Conversation Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .group {
+            background: #e3f2fd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #2196f3;
+        }
+        .round {
+            background: #f3e5f5;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 3px solid #9c27b0;
+        }
+        button {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .stats {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🤖 AI Group Conversation System Test</h1>
+        <p>This page tests the AI Group Conversation Manager functionality.</p>
+        
+        <div>
+            <button onclick="initializeTest()">Initialize AI Manager</button>
+            <button onclick="startAIConversation()">Start AI Conversation</button>
+            <button onclick="completeRound()">Complete Round</button>
+            <button onclick="showStatistics()">Show Statistics</button>
+            <button onclick="resetSystem()">Reset System</button>
+        </div>
+        
+        <div id="output"></div>
+    </div>
+
+    <script src="js/ai-group-conversation.js"></script>
+    <script>
+        let aiManager = null;
+        const testLearners = [
+            'Akhila', 'Navya', 'Prashanth', 'Tiju', 'Reena', 'Bhavishya',
+            'Iflaha', 'Samsheena', 'Sharan', 'Geetha', 'Shabna', 'Vathsala',
+            'Chaithra', 'Sowjanya', 'Chaitha p', 'Safeeda', 'Sudeep', 'Shaima',
+            'Haseena', 'James', 'Mubeena', 'Thafseeda', 'Thomas'
+        ];
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            div.className = type === 'group' ? 'group' : type === 'round' ? 'round' : type === 'stats' ? 'stats' : '';
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function initializeTest() {
+            try {
+                aiManager = new AIGroupConversationManager();
+                aiManager.initialize(testLearners);
+                
+                // Set up callbacks
+                aiManager.onRoundComplete((round, groupInfo) => {
+                    log(`Round ${round} completed! Group: ${groupInfo.group.join(', ')}`, 'round');
+                });
+                
+                aiManager.onGroupChange((newGroup, groupInfo) => {
+                    log(`🔄 Group changed to: ${newGroup.join(', ')} (Group #${groupInfo.totalGroups})`, 'group');
+                });
+                
+                log(`✅ AI Manager initialized with ${testLearners.length} learners`);
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        function startAIConversation() {
+            if (!aiManager) {
+                log('❌ Please initialize AI Manager first');
+                return;
+            }
+            
+            try {
+                const result = aiManager.startAIConversation();
+                log(`🚀 AI Conversation started! First group: ${result.group.join(', ')}`, 'group');
+                log(`Round ${result.round}/${result.totalRounds} ready`);
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+
+        function completeRound() {
+            if (!aiManager || !aiManager.isAIActive()) {
+                log('❌ AI Manager not active. Please start AI conversation first');
+                return;
+            }
+            
+            const result = aiManager.completeRound();
+            if (result) {
+                if (result.groupChanged) {
+                    log(`🎉 Round completed! New group selected: ${result.newGroup.join(', ')}`, 'group');
+                } else {
+                    log(`✅ Round ${result.round - 1} completed. Next: Round ${result.round}/${result.totalRounds}`, 'round');
+                }
+            }
+        }
+
+        function showStatistics() {
+            if (!aiManager) {
+                log('❌ Please initialize AI Manager first');
+                return;
+            }
+            
+            const stats = aiManager.getStatistics();
+            let statsHtml = `
+                <strong>📊 AI Conversation Statistics:</strong><br>
+                • Total Conversations: ${stats.totalConversations}<br>
+                • Unique Groups: ${stats.uniqueGroups}<br>
+                • Current Group: ${stats.currentGroup.join(', ')}<br>
+                • Current Round: ${stats.currentRound}<br>
+                • System Active: ${stats.isActive ? '✅' : '❌'}<br>
+                <strong>Learner Participation:</strong><br>
+            `;
+            
+            Object.entries(stats.learnerParticipation).forEach(([learner, count]) => {
+                statsHtml += `• ${learner}: ${count} conversations<br>`;
+            });
+            
+            log(statsHtml, 'stats');
+        }
+
+        function resetSystem() {
+            if (aiManager) {
+                aiManager.reset();
+                log('🔄 AI Manager reset');
+            }
+        }
+
+        // Auto-initialize for demo
+        window.onload = function() {
+            log('🎯 AI Group Conversation Test Page Loaded');
+            log('Click "Initialize AI Manager" to start testing');
+        };
+    </script>
+</body>
+</html>

@@ -20,7 +20,6 @@ Person 3: Hello! I'm fine too.
 Person 4: Hi! All good here. Long time no see!
 
 
-
 Conversation 3 
 Basic Introduction and Greetings
 Person 1: Hello! Where are you from?
@@ -29,62 +28,61 @@ Person 3: Bangalore here.
 Person 4: I'm from Hyderabad. Nice to meet you all!
 
 
-
 Conversation 4  
 Basic Introduction and Greetings
 Person 1: Hi! First time meeting you. What's your name?
-Person 2: I'm Jhon. And you?
-Person 1: I'm Alice. Nice to meet you!
+Person 2: I'm John. And you?
+Person 3: I'm Alice. Nice to meet you!
+Person 4: Welcome to our group!
 
 
 Conversation 5  
 Basic Introduction and Greetings
 Person 2: Good evening! Where are you all headed?
 Person 4: Just going for a walk. Care to join?
-Person 5: Sounds good! Let's go.
+Person 1: Sounds good! Let's go.
+Person 3: I'll come along too.
 
 
 
 Conversation 6 
 Basic Introduction and Greetings
-Person 1: Hello! How was your weekend?
-Person 2: It was good. Went to the beach.
-Person 3: I visited my grandparents.
-Person 4: I just relaxed at home.
-
+Alex: Hello! How was your weekend?
+Maya: It was good. Went to the beach.
+Sam: I visited my grandparents.
+Rita: I just relaxed at home.
 
 
 Conversation 7 
 Basic Introduction and Greetings
-Person 2: Hi! Did you watch the match yesterday?
-Person 3: Oh yes! What a game!
-Person 4: It was thrilling till the end.
-
+Maya: Hi! Did you watch the match yesterday?
+Sam: Oh yes! What a game!
+Rita: It was thrilling till the end.
+Alex: Best match this season!
 
 
 Conversation 8 
 Basic Introduction and Greetings
-Person 1: Good afternoon! What's for lunch today?
-Person 2: I brought curd rice. You?
-Person 3: Lemon rice for me.
-Person 4: I got tamarind rice.
-
+Alex: Good afternoon! What's for lunch today?
+Maya: I brought curd rice. You?
+Sam: Lemon rice for me.
+Rita: I got tamarind rice.
 
 
 Conversation 9 
 Basic Introduction and Greetings
-Person 3: Hey! How's work going?
-Person 4: Busy, but manageable. How about you?
-Person 1: Same here. Deadlines everywhere!
-
+Sam: Hey! How's work going?
+Rita: Busy, but manageable. How about you?
+Alex: Same here. Deadlines everywhere!
+Maya: We all need a break.
 
 
 Conversation 10  
 Basic Introduction and Greetings
-Person 1: Hello! Are you from around here?
-Person 2: Yes, I live nearby.
-Person 3: I moved here recently.
-Person 4: I visit often but live in a different city.
+Alex: Hello! Are you from around here?
+Maya: Yes, I live nearby.
+Sam: I moved here recently.
+Rita: I visit often but live in a different city.
 
 
 

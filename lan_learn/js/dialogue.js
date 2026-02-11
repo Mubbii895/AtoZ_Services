@@ -17,12 +17,38 @@ class DialoguePage {
 
         // Keep initial-vs-normal gap consistent when changing speed via slider
         this.autoAdvanceInitialOffsetMs = Math.max(0, this.autoAdvanceInitialDelayMs - this.autoAdvanceDelayMs);
+        
+        // AI Group Conversation System
+        this.aiGroupManager = null;
+        this.isAIMode = false;
+        this.aiRoundCount = 0;
+        
         this.init();
     }
 
     init() {
         this.setupEventListeners();
+        this.initializeAIGroupManager();
         console.log('Dialogue Page initialized');
+    }
+
+    initializeAIGroupManager() {
+        if (typeof AIGroupConversationManager !== 'undefined') {
+            this.aiGroupManager = new AIGroupConversationManager();
+            
+            // Set up callbacks for AI events
+            this.aiGroupManager.onRoundComplete((round, groupInfo) => {
+                console.log(`AI Round ${round} completed:`, groupInfo);
+                this.updateAIStatus(groupInfo);
+            });
+
+            this.aiGroupManager.onGroupChange((newGroup, groupInfo) => {
+                console.log('AI Group changed to:', newGroup, groupInfo);
+                this.handleAIGroupChange(newGroup, groupInfo);
+            });
+        } else {
+            console.warn('AIGroupConversationManager not available');
+        }
     }
 
     setupEventListeners() {
@@ -41,6 +67,7 @@ class DialoguePage {
         const nextLineBtn = document.getElementById('next-line-btn');
         const toggleAutoAdvanceBtn = document.getElementById('toggle-auto-advance-btn');
         const speedSlider = document.getElementById('speed-slider');
+        const aiModeToggle = document.getElementById('ai-mode-toggle');
 
         if (prevConversationBtn) {
             prevConversationBtn.addEventListener('click', () => this.previousConversation());
@@ -69,6 +96,10 @@ class DialoguePage {
                 const value = parseInt(e.target.value, 10);
                 this.setAutoAdvanceSpeed(value);
             });
+        }
+
+        if (aiModeToggle) {
+            aiModeToggle.addEventListener('click', () => this.toggleAIMode());
         }
     }
 
@@ -191,6 +222,12 @@ class DialoguePage {
             return; // setCurrentConversation schedules the initial delay
         }
 
+        // Handle AI mode when all conversations are finished
+        if (this.isAIMode && this.aiGroupManager) {
+            this.completeAIRound();
+            return;
+        }
+
         // Last conversation finished
         this.stopAutoAdvance();
     }
@@ -216,7 +253,165 @@ class DialoguePage {
             return;
         }
 
+    // Check if we should start in AI mode (if enough learners available)
+        if (this.learnerNames.length >= 4 && this.aiGroupManager) {
+            this.showAIModeOption();
+            
+            // Auto-start AI mode if user has many learners (8 or more)
+            if (this.learnerNames.length >= 8) {
+                setTimeout(() => {
+                    this.showAINotification(`You have ${this.learnerNames.length} learners! AI Mode is perfect for automatic group conversations.`);
+                }, 1000);
+            }
+        }
+
         await this.loadDialogue();
+    }
+
+    showAIModeOption() {
+        const aiModeContainer = document.getElementById('ai-mode-container');
+        if (aiModeContainer) {
+            aiModeContainer.style.display = 'block';
+        }
+    }
+
+    toggleAIMode() {
+        if (!this.aiGroupManager || this.learnerNames.length < 4) {
+            this.showError('AI Mode requires at least 4 learners. Please add more learners.');
+            return;
+        }
+
+        this.isAIMode = !this.isAIMode;
+        
+        if (this.isAIMode) {
+            this.startAIMode();
+        } else {
+            this.stopAIMode();
+        }
+        
+        this.updateAIModeUI();
+    }
+
+    startAIMode() {
+        try {
+            this.aiGroupManager.initialize(this.learnerNames);
+            const groupInfo = this.aiGroupManager.startAIConversation();
+            
+            // Update learner names to current AI group
+            this.learnerNames = groupInfo.group;
+            this.aiRoundCount = 0;
+            
+            // Reprocess dialogue with new group
+            this.processDialogue();
+            this.setCurrentConversation(0);
+            
+            this.updateAIStatus(groupInfo);
+            this.showAINotification(`AI Mode Started! Group: ${groupInfo.group.join(', ')}`);
+            
+            console.log('AI Mode started with group:', groupInfo.group);
+        } catch (error) {
+            console.error('Failed to start AI mode:', error);
+            this.showError(error.message);
+            this.isAIMode = false;
+        }
+    }
+
+    stopAIMode() {
+        if (this.aiGroupManager) {
+            this.aiGroupManager.stopAIConversation();
+        }
+        
+        this.aiRoundCount = 0;
+        this.hideAIStatus();
+        this.showAINotification('AI Mode Stopped');
+        
+        console.log('AI Mode stopped');
+    }
+
+    handleAIGroupChange(newGroup, groupInfo) {
+        if (!this.isAIMode) return;
+        
+        // Update learner names to new group
+        this.learnerNames = newGroup;
+        this.aiRoundCount = 0;
+        
+        // Reprocess dialogue with new group
+        this.processDialogue();
+        this.setCurrentConversation(0);
+        
+        this.updateAIStatus(groupInfo);
+        this.showAINotification(`New Group Selected: ${newGroup.join(', ')}`);
+        
+        // Auto-start first conversation of new group
+        if (this.autoAdvanceEnabled) {
+            this._scheduleAutoAdvance(this.autoAdvanceInitialDelayMs);
+        }
+    }
+
+    updateAIStatus(groupInfo) {
+        const aiStatusElement = document.getElementById('ai-status');
+        const aiGroupElement = document.getElementById('ai-current-group');
+        const aiRoundElement = document.getElementById('ai-current-round');
+        
+        if (aiStatusElement) {
+            aiStatusElement.style.display = this.isAIMode ? 'block' : 'none';
+        }
+        
+        if (aiGroupElement && this.isAIMode) {
+            aiGroupElement.textContent = groupInfo.group.join(', ');
+        }
+        
+        if (aiRoundElement && this.isAIMode) {
+            aiRoundElement.textContent = `${groupInfo.round}/${groupInfo.totalRounds}`;
+        }
+    }
+
+    hideAIStatus() {
+        const aiStatusElement = document.getElementById('ai-status');
+        if (aiStatusElement) {
+            aiStatusElement.style.display = 'none';
+        }
+    }
+
+    updateAIModeUI() {
+        const aiModeToggle = document.getElementById('ai-mode-toggle');
+        const aiModeIcon = document.getElementById('ai-mode-icon');
+        
+        if (aiModeToggle) {
+            aiModeToggle.classList.toggle('active', this.isAIMode);
+            aiModeToggle.title = this.isAIMode ? 'Disable AI Mode' : 'Enable AI Mode';
+        }
+        
+        if (aiModeIcon) {
+            aiModeIcon.setAttribute('data-lucide', this.isAIMode ? 'brain-circuit' : 'brain');
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+    }
+
+    showAINotification(message) {
+        if (typeof Utils !== 'undefined') {
+            Utils.showToast(message, 'info');
+        } else {
+            console.log('AI Notification:', message);
+        }
+    }
+
+    // Get AI conversation statistics
+    getAIStatistics() {
+        if (!this.aiGroupManager) return null;
+        return this.aiGroupManager.getStatistics();
+    }
+
+    // Display AI statistics
+    showAIStatistics() {
+        const stats = this.getAIStatistics();
+        if (!stats) return;
+
+        const message = `AI Stats: ${stats.totalConversations} conversations, ${stats.uniqueGroups} unique groups`;
+        this.showAINotification(message);
+        console.log('AI Statistics:', stats);
     }
 
     async loadDialogue() {
@@ -538,6 +733,33 @@ class DialoguePage {
     nextConversation() {
         if (this.currentConversationIndex < this.modifiedDialogue.length - 1) {
             this.setCurrentConversation(this.currentConversationIndex + 1);
+        } else if (this.isAIMode && this.aiGroupManager) {
+            // In AI mode, complete round when reaching end of conversations
+            this.completeAIRound();
+        }
+    }
+
+    completeAIRound() {
+        if (!this.isAIMode || !this.aiGroupManager) return;
+        
+        this.aiRoundCount++;
+        const result = this.aiGroupManager.completeRound();
+        
+        if (result) {
+            if (result.groupChanged) {
+                // Group change is handled by the callback
+                console.log('AI Round completed - group changed');
+            } else {
+                // Same group, start next round
+                this.setCurrentConversation(0);
+                this.updateAIStatus(result);
+                this.showAINotification(`Round ${result.round} started`);
+                
+                // Auto-start next round
+                if (this.autoAdvanceEnabled) {
+                    this._scheduleAutoAdvance(this.autoAdvanceInitialDelayMs);
+                }
+            }
         }
     }
 
