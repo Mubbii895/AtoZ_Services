@@ -239,6 +239,7 @@ class DialoguePage {
                 this.setCurrentConversation(idx);
             });
         }
+        
 
         // Navigation buttons
         const prevConversationBtn = document.getElementById('prev-conversation-btn');
@@ -467,11 +468,8 @@ class DialoguePage {
     startAIModeWithSelection(initialGroup = null) {
         try {
             this.isAIMode = true;
-            // IMPORTANT: GLOBAL RULE - never reset conversation number automatically
-            const existing = window.ConversationState?.get?.();
-            const existingNumber = Number(existing?.conversationNumber);
-            const safeExisting = Number.isFinite(existingNumber) && existingNumber >= 1 ? Math.floor(existingNumber) : 0;
-            this.globalConversationCount = safeExisting;
+            // Reset to 0 so the first conversation becomes 1
+            this.globalConversationCount = 0;
             this.aiGroupManager.initialize(this.allLearnersForSelection.length ? this.allLearnersForSelection : this.learnerNames, {
                 selectionMode: this.selectionMode
             });
@@ -544,11 +542,8 @@ class DialoguePage {
             if (!this.isAIMode) {
                 this.isAIMode = true;
             }
-            // IMPORTANT: GLOBAL RULE - never reset conversation number automatically
-            const existing = window.ConversationState?.get?.();
-            const existingNumber = Number(existing?.conversationNumber);
-            const safeExisting = Number.isFinite(existingNumber) && existingNumber >= 1 ? Math.floor(existingNumber) : 0;
-            this.globalConversationCount = safeExisting;
+            // Reset to 0 so the first conversation becomes 1
+            this.globalConversationCount = 0;
             const learners = this.allLearnersForSelection.length ? this.allLearnersForSelection : this.learnerNames;
             this.aiGroupManager.initialize(learners, { selectionMode: 'random' });
             const groupInfo = this.aiGroupManager.startAIConversation();
@@ -1007,11 +1002,11 @@ class DialoguePage {
             // Detect "Conversation X" lines (smaller font)
             const isConversationNumber = trimmedLine.startsWith('Conversation ') && /^Conversation \d+/.test(trimmedLine);
             
-            // Detect "Basic Introduction and Greetings" type titles (larger font, bold, underline)
-            const isConversationTitle = trimmedLine.includes('Basic Introduction') || 
-                                       (trimmedLine !== '' && !trimmedLine.includes(':') && 
-                                        !isConversationNumber && trimmedLine.length > 10 && 
-                                        !trimmedLine.match(/^Person \d+:/));
+            // Detect topic title lines (no colon, non-empty, not a Conversation X line)
+            const isConversationTitle = !isConversationNumber &&
+                trimmedLine !== '' &&
+                !trimmedLine.includes(':') &&
+                trimmedLine.length > 10;
             
             let className = isHighlighted ? 'highlighted-line' : '';
             if (isConversationNumber) {
@@ -1022,7 +1017,27 @@ class DialoguePage {
             
             const id = isHighlighted ? 'highlighted-line' : '';
             
-            return `<div class="${className}" id="${id}">${line}</div>`;
+            // For highlighted lines: show speaker name (keep HTML as-is)
+            // For non-highlighted lines: hide speaker name, show only dialogue text
+            let displayLine = line;
+            if (!isHighlighted && !isConversationNumber && !isConversationTitle && trimmedLine !== '') {
+                // Extract only the dialogue text, removing speaker name
+                // Handle HTML format: <span class="learner-name">...</span>:<span class="conversation-text">text</span>
+                const learnerNameMatch = line.match(/<span class="learner-name">.*?<\/span>:\s*<span class="conversation-text">(.*?)<\/span>/);
+                if (learnerNameMatch) {
+                    // Extract only the conversation text
+                    displayLine = learnerNameMatch[1];
+                } else {
+                    // Handle plain text format: "Person 1: text" or "Alex: text" or "Maya: text"
+                    const colonMatch = line.match(/^[^:]+:\s*(.+)$/);
+                    if (colonMatch) {
+                        displayLine = colonMatch[1];
+                    }
+                    // If no colon found, keep the line as-is (might be already processed or empty)
+                }
+            }
+            
+            return `<div class="${className}" id="${id}">${displayLine}</div>`;
         }).join('');
     }
 

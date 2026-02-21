@@ -47,7 +47,9 @@
     }
   }
 
-  let state = load();
+  // Always start fresh on page load (reset to 1); clear any stale persisted value.
+  try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+  let state = { ...defaultState };
 
   function emit() {
     window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { ...state } }));
