@@ -64,10 +64,33 @@
 
     <!-- Main Container -->
     <div id="app">
+      <!-- Login Page -->
+      <div id="login-page" class="page active">
+        <div class="login-container">
+          <div class="login-card">
+            <h2 class="login-title">Language Learning App</h2>
+            <p class="login-subtitle">Enter your email to continue</p>
+            <form id="login-form" class="login-form">
+              <label for="login-email" class="login-label">Email ID</label>
+            
+              
+              <input
+                type="email"
+                id="login-email"
+                placeholder="Enter your email"
+                class="login-input"
+                required
+              />
+              <button type="submit" id="login-btn" class="login-btn">Login</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <!-- Home Page -->
-      <div id="home-page" class="page active">
+      <div id="home-page" class="page">
         <div class="home-container">
-          <h3 class="home-heading">Speak Freely, Connect Globally</h3>
+          <h3 class="home-heading">SPEAK FREELY, CONNECT GLOBALLY</h3>
 
           <div class="topbar">
             <div class="input-container">
@@ -83,16 +106,15 @@
               >
                 Add Learner
               </button>
-              <button
-                id="add-group-btn"
-                class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 ml-2"
-                title="Add 4-person group"
-              >
-                Add 4-Person Group
-              </button>
             </div>
 
             <div class="continue-btn-container">
+              <button
+                id="logout-btn"
+                class="bg-gray-500 text-white rounded px-4 py-2 hover:bg-gray-600"
+              >
+                Logout
+              </button>
               <button
                 id="start-learning-btn"
                 class="bg-green-800 text-white rounded px-4 py-2 hover:bg-green-600"

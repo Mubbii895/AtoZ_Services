@@ -191,23 +191,25 @@ class LearnHome {
     }
 
     startLearning() {
-        if (this.learners.length < 4) {
+        const selectedNames = this.getSelectedLearnerNames();
+        const learnerNamesForDialogue = selectedNames.length > 0
+            ? selectedNames
+            : this.getAllLearnerNames();
+
+        if (learnerNamesForDialogue.length === 0) {
             const warningMessage = document.getElementById('warning-message');
             if (warningMessage) {
-                warningMessage.textContent = 'Please add at least 4 learners to start the automatic group conversations.';
+                warningMessage.textContent = 'Please add at least one learner to start learning.';
             }
             Utils.showPopup('warning-popup');
             return;
         }
 
-        // Navigate to dialogue; show selection popup (Random / Manual)
+        // Navigate to existing dialogue page without changing dialogue UI/logic
         if (app) {
             app.showPage('dialogue');
             if (window.dialoguePage) {
-                window.dialoguePage.initializeWithLearners(this.getAllLearnerNames(), {
-                    showSelectionStep: true,
-                    forceAutoAdvance: true
-                });
+                window.dialoguePage.initializeWithLearners(learnerNamesForDialogue);
             }
         }
     }
@@ -341,11 +343,6 @@ class LearnHome {
         this.learners = Utils.getFromStorage('learners', []);
         this.selectedLearners = Utils.getFromStorage('selectedLearners', []);
         
-        // If no learners exist in storage, load default learners from JSON
-        if (this.learners.length === 0) {
-            await this.loadDefaultLearners();
-        }
-        
         // Clean up selected learners (remove IDs that no longer exist)
         this.selectedLearners = this.selectedLearners.filter(id =>
             this.learners.some(learner => learner.id === id)
@@ -417,6 +414,15 @@ class LearnHome {
 
     saveSelectedLearners() {
         Utils.saveToStorage('selectedLearners', this.selectedLearners);
+    }
+
+    resetLearners() {
+        this.learners = [];
+        this.selectedLearners = [];
+        this.saveLearners();
+        this.saveSelectedLearners();
+        this.refreshTable();
+        this.updateCounts();
     }
 
     // Public methods for external access

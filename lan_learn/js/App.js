@@ -1,18 +1,89 @@
 // Main Application JavaScript
 class GTongueLearnApp {
     constructor() {
-        this.currentPage = 'home';
+        this.currentPage = 'login';
+        this.isLoggedIn = false;
+        this.userEmail = '';
         this.translationService = null;
         this.init();
     }
 
     init() {
         this.setupTranslationService();
+        this.setupLogin();
         this.setupNavigation();
         this.setupLanguageSelector();
-        this.showPage('home');
+        this.restoreLoginSession();
         this.initializeLucideIcons();
         console.log('GTongue Learn App initialized');
+    }
+
+    setupLogin() {
+        const loginForm = document.getElementById('login-form');
+        const emailInput = document.getElementById('login-email');
+
+        if (!loginForm || !emailInput) return;
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = emailInput.value.trim();
+            const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+            if (!isValidEmail) {
+                Utils.showToast('Please enter a valid email address', 'warning');
+                return;
+            }
+
+            this.isLoggedIn = true;
+            this.userEmail = email;
+            try {
+                localStorage.setItem('gtongue_logged_in_email', email);
+                localStorage.removeItem('learners');
+                localStorage.removeItem('selectedLearners');
+            } catch (error) {
+                console.warn('Could not save login session:', error);
+            }
+
+            if (window.learnHome?.resetLearners) {
+                window.learnHome.resetLearners();
+            }
+
+            this.showPage('home');
+            Utils.showToast('Login successful', 'success');
+            emailInput.value = '';
+        });
+    }
+
+    restoreLoginSession() {
+        let savedEmail = '';
+        try {
+            savedEmail = localStorage.getItem('gtongue_logged_in_email') || '';
+        } catch (error) {
+            console.warn('Could not read login session:', error);
+        }
+
+        if (savedEmail) {
+            this.isLoggedIn = true;
+            this.userEmail = savedEmail;
+            this.showPage('home');
+            return;
+        }
+
+        this.showPage('login');
+    }
+
+    logout() {
+        this.isLoggedIn = false;
+        this.userEmail = '';
+
+        try {
+            localStorage.removeItem('gtongue_logged_in_email');
+        } catch (error) {
+            console.warn('Could not clear login session:', error);
+        }
+
+        this.showPage('login');
+        Utils.showToast('Logged out successfully', 'info');
     }
 
     setupTranslationService() {
@@ -138,9 +209,16 @@ class GTongueLearnApp {
                     // Let the link open normally in a new tab
                     return;
                 }
+
+                const page = href.substring(1); // Remove the # from href
+                if (!this.isLoggedIn && page !== 'login') {
+                    e.preventDefault();
+                    Utils.showToast('Please login first', 'warning');
+                    this.showPage('login');
+                    return;
+                }
                 
                 e.preventDefault();
-                const page = href.substring(1); // Remove the # from href
                 this.showPage(page);
                 this.updateActiveNavLink(link);
             });
@@ -162,9 +240,17 @@ class GTongueLearnApp {
         document.getElementById('about-btn')?.addEventListener('click', () => {
             this.showPage('about');
         });
+
+        document.getElementById('logout-btn')?.addEventListener('click', () => {
+            this.logout();
+        });
     }
 
     showPage(pageId) {
+        if (!this.isLoggedIn && pageId !== 'login') {
+            pageId = 'login';
+        }
+
         const previousPage = this.currentPage;
 
         // Pause auto-advance when leaving Dialogue page
@@ -190,12 +276,24 @@ class GTongueLearnApp {
 
         // Update navigation
         this.updateNavigation(pageId);
+        this.updateNavbarForPage(pageId);
 
         // Keep global conversation number reflected on every page
         window.ConversationState?.syncUI?.();
         
         // Reinitialize Lucide icons for the new page
         setTimeout(() => this.initializeLucideIcons(), 100);
+    }
+
+    updateNavbarForPage(pageId) {
+        const navLinksContainer = document.querySelector('.nav-links');
+        if (!navLinksContainer) return;
+
+        if (pageId === 'login') {
+            navLinksContainer.style.display = 'none';
+        } else {
+            navLinksContainer.style.display = 'flex';
+        }
     }
 
     updateActiveNavLink(activeLink) {
